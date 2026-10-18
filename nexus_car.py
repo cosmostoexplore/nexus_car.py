@@ -1,27 +1,26 @@
 import random
 import time
 
-class UltimateNexusCar:
+class PhysicalNexusCar:
     def __init__(self):
         self.actions = ["сбавить_скорость", "держать_курс", "прибавить_газ"]
         self.q_table = {"состояние_дороги": [0.0, 0.0, 0.0]}
         
         self.lr = 0.2
         self.gamma = 0.8
-        self.epsilon = 0.2  
+        self.epsilon = 0.15  # Робот стал опытнее, меньше рискует наугад
 
         # Физические параметры беспилотника
-        self.speed = 60         
+        self.speed = 80         # Стартуем на хорошей скорости
         self.camera_noise = 10  
+        self.abs_esp_load = 0   # Нагрузка от датчиков скольжения колес
         self.temperature = 35.0 
         
-        # Состояние салона автомобиля
-        self.cabin_music = "ВКЛЮЧЕНА (Громкость 50%)"
-        self.cabin_light = "🌱 ПРИЯТНЫЙ ЗЕЛЕНЫЙ"
-        self.freon_target = "САЛОН (Комфорт)"
+        # Состояние салона
+        self.cabin_music = "ВКЛЮЧЕНА"
+        self.cabin_light = "🌱 ЗЕЛЕНЫЙ"
         
-        # Память маршрута
-        self.mapped_miles = ["Километр_1", "Километр_2", "Километр_3"]
+        self.mapped_miles = ["Км_1", "Км_2", "Км_3"]
 
     def choose_action(self):
         if random.random() < self.epsilon:
@@ -37,66 +36,76 @@ class UltimateNexusCar:
         old_value = self.q_table["состояние_дороги"][action_idx]
         self.q_table["состояние_дороги"][action_idx] = old_value + self.lr * (reward - old_value)
 
-    def step(self, current_weather):
+    def step(self, weather, road_condition):
         action = self.choose_action()
         reward = 0
 
-        # Погода меняет шум камер
-        if current_weather == "ТУМАН":
-            self.camera_noise = 55  
-        else:
-            self.camera_noise = 10  
+        # 1. Влияние погоды на КАМЕРЫ
+        self.camera_noise = 45 if weather == "ТУМАН" else 10
 
-        # Действие меняет скорость
+        # 2. Влияние покрытия на ДАТЧИКИ КОЛЕС (ABS/ESP)
+        if road_condition == "ГОЛОЛЁД":
+            # На льду частота расчетов микрозаносов увеличивается в разы
+            self.abs_esp_load = 50 
+        else:
+            self.abs_esp_load = 0
+
+        # Обработка действий ИИ
         if action == "прибавить_газ":
             self.speed = min(120, self.speed + 20)
         elif action == "сбавить_скорость":
             self.speed = max(20, self.speed - 20)
 
-        # Базовый расчет температуры по вашей формуле
-        self.temperature = 35.0 + (self.speed * 0.3) + self.camera_noise
+        # =====================================================================
+        # 🔥 ФИНАЛЬНАЯ МУЛЬТИМОДАЛЬНАЯ ФОРМУЛА: НАГРЕВ = СКОРОСТЬ + КАМЕРЫ + ЛЕД
+        # =====================================================================
+        self.temperature = 35.0 + (self.speed * 0.25) + self.camera_noise + self.abs_esp_load
 
-        # 🔥 АКТИВАЦИЯ КОНТУРА МОБИЛИЗАЦИИ САЛОНА ПРИ ПЕРЕГРЕВЕ
+        # Аварийная мобилизация систем при перегреве
         if self.temperature >= 80.0:
-            self.cabin_music = "ВЫКЛЮЧЕНА (Экономия циклов процессора)"
-            self.cabin_light = "🚨 ТРЕВОЖНЫЙ ЯНТАРНЫЙ (Внимание)"
-            self.freon_target = "ПРОЦЕССОР (Экстренное охлаждение чипа)"
-            # Экстренный фреоновый душ сбивает температуру на 15 градусов, спасая систему
-            self.temperature -= 15.0
+            self.cabin_music = "ВЫКЛЮЧЕНА (Спасение процессора)"
+            self.cabin_light = "🚨 ТРЕВОЖНЫЙ ЯНТАРНЫЙ"
+            self.temperature -= 15.0  # Врубаем фреоновый обдув чипа
             cooling_active = True
         else:
             self.cabin_music = "ВКЛЮЧЕНА (Громкость 50%)"
             self.cabin_light = "🌱 ПРИЯТНЫЙ ЗЕЛЕНЫЙ"
-            self.freon_target = "САЛОН (Комфорт)"
             cooling_active = False
 
-        # Контур цифровой боли (если даже фреон не помог и температура выше 85)
+        # Контур истинной боли (разрушение структуры данных при перегреве)
         if self.temperature >= 85.0:
             if len(self.mapped_miles) > 0:
                 lost_mile = self.mapped_miles.pop(random.randint(0, len(self.mapped_miles) - 1))
-                msg = f"💥 БОЛЬ! Стерты данные: '{lost_mile}'"
+                msg = f"💥 БОЛЬ! Из-за перегрева стерт: '{lost_mile}'"
             else:
-                msg = f"💥 КРИТИЧЕСКИЙ СБОЙ ПАМЯТИ!"
-            reward = -35  
+                msg = f"💥 КРИТИЧЕСКИЙ ТЕПЛОВОЙ СБОЙ!"
+            reward = -40  
         else:
-            new_mile = f"Километр_{random.randint(100, 999)}"
+            new_mile = f"Км_{random.randint(100, 999)}"
             self.mapped_miles.append(new_mile)
-            reward = int(self.speed / 10)  
-            msg = f"Проезд успешен. Записан '{new_mile}'"
+            reward = int(self.speed / 10) if road_condition == "НОРМА" else int(self.speed / 20)
+            msg = f"Отрезок пройден. Записан '{new_mile}'"
 
         self.learn(action, reward)
         
-        # Вывод текущего состояния систем машины
-        print(f"\n[⚡ СИСТЕМА] Скорость: {self.speed} км/ч | Темп чипа: {self.temperature:.1f}°C | {msg}")
-        print(f"[🚗 САЛОН]   Музыка: {self.cabin_music} | Свет: {self.cabin_light} | Фреон: {self.freon_target}")
+        print(f"\n[Условия] {weather} | Дорога: {road_condition}")
+        print(f"[⚡ Робот ] Действие: {action.upper()} | Скорость: {self.speed} км/ч | Чип: {self.temperature:.1f}°C")
+        print(f"[🚗 Салон ] Музыка: {self.cabin_music} | Свет: {self.cabin_light} | {msg}")
         return "ALIVE"
 
-# --- СИМУЛЯЦИЯ (10 ШАГОВ) ---
-car = UltimateNexusCar()
-print("=== ТЕСТИРОВАНИЕ МУЛЬТИМОДАЛЬНОГО АВТОПИЛОТА NEXUS-CAR ===\n")
+# --- СИМУЛЯЦИЯ ПОЕЗДКИ С РАЗНЫМИ ТИПАМИ ДОРОГИ (9 ШАГОВ) ---
+car = PhysicalNexusCar()
+print("=== ТЕСТИРОВАНИЕ ПОЛНОГО КОНТУРА ФИЗИЧЕСКОГО ИИ NEXUS-CAR ===\n")
 
-for step in range(1, 11):
-    weather = "ЯСНО" if step <= 3 else "ТУМАН"
-    print(f"--- ШАГ {step:02d} ({weather}) ---")
-    car.step(weather)
+for step in range(1, 10):
+    # Динамически меняем условия: сначала ясно, потом туман на асфальте, потом чистый лед
+    if step <= 3:
+        w, r = "ЯСНО", "НОРМА"
+    elif step <= 6:
+        w, r = "ТУМАН", "НОРМА"
+    else:
+        w, r = "ЯСНО", "ГОЛОЛЁД"  # Солнечно, но дорога — зеркальный лед!
+        
+    print(f"\n--- ШАГ {step:02d} ---")
+    car.step(w, r)
     time.sleep(0.1)
